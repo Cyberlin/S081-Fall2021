@@ -1,6 +1,17 @@
 {
     "C_Cpp.default.intelliSenseMode": "linux-gcc-x86",
     "C_Cpp.loggingLevel": "Warning",
-    "C_Cpp.clang_format_fallbackStyle": "{ BasedOnStyle: LLVM, SortIncludes: true}",
-    "C_Cpp.default.cStandard": "c17"
+    "C_Cpp.clang_format_fallbackStyle": "{ BasedOnStyle: WebKit, SortIncludes: false,IndentWidth: 4}",
+    "C_Cpp.default.cStandard": "c17",
+    "files.associations": {
+        "user.h": "c",
+        "cmath": "cpp",
+        "type_traits": "cpp",
+        "limits": "cpp",
+        "typeinfo": "cpp",
+        "stat.h": "c",
+        "types.h": "c",
+        "fs.h": "c",
+        "param.h": "c"
+    }
 }

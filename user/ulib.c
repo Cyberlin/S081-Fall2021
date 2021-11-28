@@ -42,7 +42,7 @@ memset(void *dst, int c, uint n)
   }
   return dst;
 }
-
+//arg1:目标字符串;arg2:目标字符;return:指向该字符位置的指针
 char*
 strchr(const char *s, char c)
 {
@@ -94,7 +94,7 @@ atoi(const char *s)
     n = n*10 + *s++ - '0';
   return n;
 }
-
+//第一个参数是目的地址（void*）,第二个参数是原地址（void*）,第三个参数是n byte
 void*
 memmove(void *vdst, const void *vsrc, int n)
 {

@@ -53,11 +53,13 @@ ls(char *path)
     }
     strcpy(buf, path);
     p = buf+strlen(buf);
+    //先取p 的值，然后移动
     *p++ = '/';
     while(read(fd, &de, sizeof(de)) == sizeof(de)){
       if(de.inum == 0)
         continue;
       memmove(p, de.name, DIRSIZ);
+      //形成字符串
       p[DIRSIZ] = 0;
       if(stat(buf, &st) < 0){
         printf("ls: cannot stat %s\n", buf);
