@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "syscall.h"
 
 struct cpu cpus[NCPU];
 
@@ -272,21 +273,29 @@ growproc(int n)
 int
 fork(void)
 {
-  int i, pid;
+  int i, pid,curpid;
   struct proc *np;
   struct proc *p = myproc();
+  curpid=p->pid;
+  int trace_num = p->trace_num;
+  int res;
 
   // Allocate process.
   if((np = allocproc()) == 0){
-    return -1;
+    res = -1;
+    goto last;
+    //return -1;
   }
 
   // Copy user memory from parent to child.
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
     freeproc(np);
     release(&np->lock);
-    return -1;
+    res = -1;
+    goto last;
+    //return -1;
   }
+  np->trace_num=trace_num;
   np->sz = p->sz;
 
   // copy saved user registers.
@@ -314,8 +323,15 @@ fork(void)
   acquire(&np->lock);
   np->state = RUNNABLE;
   release(&np->lock);
+  res =pid;
+  goto last;
+last:
+  if(trace_num&(1<<SYS_fork)){
+    printf("%d: syscall fork -> %d\n",curpid,res);
+  }
 
-  return pid;
+  return res;
+  //return pid;
 }
 
 // Pass p's abandoned children to init.

@@ -6,6 +6,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "syscall.h"
 
 uint64
 sys_exit(void)
@@ -95,3 +96,22 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+uint64
+sys_trace(void){
+  int syscall_num;
+  int res;
+
+  if(argint(0,&syscall_num)<0){
+    return -1;
+  }
+  enable_trace(syscall_num);
+  struct proc* process = myproc();
+  int pid = process->pid;
+  int trace_num = process->trace_num;
+  res=0;
+  if(trace_num&(1<<SYS_trace)){
+    printf("%d: syscall trace -> %d\n",pid,res);
+  }
+  return res;
+}
+

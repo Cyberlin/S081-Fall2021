@@ -15,6 +15,7 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
+#include "syscall.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -72,10 +73,18 @@ sys_read(void)
   struct file *f;
   int n;
   uint64 p;
+  struct proc* process=myproc();
+  int pid = process->pid;
+  int trace_num = process->trace_num;
+  int res;
 
   if(argfd(0, 0, &f) < 0 || argint(2, &n) < 0 || argaddr(1, &p) < 0)
     return -1;
-  return fileread(f, p, n);
+  res = fileread(f, p, n);
+  if(trace_num&(1<<SYS_read)){
+    printf("%d: syscall read -> %d\n",pid,res);
+  }
+  return res;
 }
 
 uint64
@@ -96,12 +105,25 @@ sys_close(void)
 {
   int fd;
   struct file *f;
+  struct proc* process =myproc();
+  int pid = process->pid;
+  int trace_num = process->trace_num;
+  int res;
 
-  if(argfd(0, &fd, &f) < 0)
-    return -1;
+  if(argfd(0, &fd, &f) < 0){
+    res = -1;
+    goto last;
+  }
+    
   myproc()->ofile[fd] = 0;
   fileclose(f);
-  return 0;
+  res = 0;
+
+last:
+  if(trace_num&(1<<SYS_close)){
+    printf("%d: syscall close -> %d\n",pid,res);
+  }
+  return res;
 }
 
 uint64
@@ -291,6 +313,10 @@ sys_open(void)
   struct file *f;
   struct inode *ip;
   int n;
+  struct proc* process =myproc();
+  int pid = process->pid;
+  int trace_num = process->trace_num;
+  int res;
 
   if((n = argstr(0, path, MAXPATH)) < 0 || argint(1, &omode) < 0)
     return -1;
@@ -301,25 +327,29 @@ sys_open(void)
     ip = create(path, T_FILE, 0, 0);
     if(ip == 0){
       end_op();
-      return -1;
+      res = -1;
+      goto last;
     }
   } else {
     if((ip = namei(path)) == 0){
       end_op();
-      return -1;
+      res = -1;
+      goto last;
     }
     ilock(ip);
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
       end_op();
-      return -1;
+      res = -1;
+      goto last;
     }
   }
 
   if(ip->type == T_DEVICE && (ip->major < 0 || ip->major >= NDEV)){
     iunlockput(ip);
     end_op();
-    return -1;
+    res = -1;
+    goto last;
   }
 
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
@@ -327,7 +357,8 @@ sys_open(void)
       fileclose(f);
     iunlockput(ip);
     end_op();
-    return -1;
+    res =-1;
+    goto last;
   }
 
   if(ip->type == T_DEVICE){
@@ -347,8 +378,14 @@ sys_open(void)
 
   iunlock(ip);
   end_op();
+  res = fd;
+  goto last;
 
-  return fd;
+last:
+  if(trace_num&(1<<SYS_open)){
+    printf("%d: syscall open -> %d\n",pid,res);
+  }
+  return res;
 }
 
 uint64
@@ -418,8 +455,14 @@ sys_exec(void)
   char path[MAXPATH], *argv[MAXARG];
   int i;
   uint64 uargv, uarg;
+  struct proc* process =myproc();
+  int pid = process->pid;
+  int trace_num = process->trace_num;
+  int res;
 
   if(argstr(0, path, MAXPATH) < 0 || argaddr(1, &uargv) < 0){
+    res =-1;
+    goto last;
     return -1;
   }
   memset(argv, 0, sizeof(argv));
@@ -446,12 +489,19 @@ sys_exec(void)
   for(i = 0; i < NELEM(argv) && argv[i] != 0; i++)
     kfree(argv[i]);
 
-  return ret;
+  res= ret;
+  goto last;
 
  bad:
   for(i = 0; i < NELEM(argv) && argv[i] != 0; i++)
     kfree(argv[i]);
-  return -1;
+  res = -1;
+  goto last;
+ last:
+    if(trace_num&(1<<SYS_exec)){
+      printf("%d: syscall exec -> %d\n",pid,res);
+    }
+    return res;
 }
 
 uint64
