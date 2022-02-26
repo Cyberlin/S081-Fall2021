@@ -5,6 +5,8 @@
         "proc.h": "c",
         "types.h": "c",
         "riscv.h": "c",
-        "file.h": "c"
+        "file.h": "c",
+        "date.h": "c",
+        "memlayout.h": "c"
     }
 }

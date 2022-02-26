@@ -7,6 +7,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "syscall.h"
+#include "sysinfo.h"
 
 uint64
 sys_exit(void)
@@ -113,5 +114,24 @@ sys_trace(void){
     printf("%d: syscall trace -> %d\n",pid,res);
   }
   return res;
+}
+uint64
+sys_sysinfo(void){
+  uint64 si;//user pointer to struct sysinfo
+  struct sysinfo sysinfo;
+  struct proc* p = myproc();
+
+  if(argaddr(0,&si)<0){
+    return -1;
+  }
+  //update the sysinfo
+  int nproc = get_nproc();
+  int freemem = get_freemem();
+  sysinfo.nproc = nproc;
+  sysinfo.freemem =freemem;
+  if(copyout(p->pagetable,si,(char*)&sysinfo,sizeof(sysinfo))<0){
+    return -1;
+  }
+  return 0;
 }
 
