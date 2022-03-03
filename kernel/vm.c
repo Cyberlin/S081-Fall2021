@@ -96,6 +96,33 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
   }
   return &pagetable[PX(0, va)];
 }
+void pgtbl_print(uint64 index, int indent, const char* prefix, pte_t* pte, pagetable_t pgtbl){
+  for(int i = 0; i < indent - 1; i++){
+    printf("%s ",prefix);
+  }
+  printf("%s",prefix);
+
+  
+  uint64 pa = PTE2PA(*pte);
+  printf("%d: pte %p pa %p\n", index, *pte, pa);
+}
+void vmprint_helper(pagetable_t pgtbl, int indent){
+  if(indent >= 4){
+    return ;
+  }
+  for(uint64 i = 0; i < 512; i++){
+    pte_t *pte = &pgtbl[i];
+    if(*pte & PTE_V){
+      pgtbl_print(i ,indent ,".." , pte, pgtbl);
+      vmprint_helper((uint64*)PTE2PA(*pte), indent + 1);
+    }
+  }
+}
+
+void vmprintf(pagetable_t pgtbl){
+  printf("page table %p\n", pgtbl);
+  vmprint_helper(pgtbl, 1);
+}
 
 // Look up a virtual address, return the physical address,
 // or 0 if not mapped.
