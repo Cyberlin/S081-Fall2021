@@ -1,0 +1,4 @@
+The most hard part of this lab is understanding the behavior of PTE_A
+The PTE_A means whether the page is accessed since the last time the A_bit was cleared
+When should I clear the A_bit, the answer is invoking the pgaccess();
+Everytime you invoke the pgaccess() system call, you should clear the A_bit, that's to clear all A_bitin every leaf PTE.

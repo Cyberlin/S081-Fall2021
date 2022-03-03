@@ -76,14 +76,48 @@ sys_sleep(void)
 }
 
 
-#ifdef LAB_PGTBL
+//#ifdef LAB_PGTBL
 int
 sys_pgaccess(void)
 {
   // lab pgtbl: your code here.
+
+  //get the args;
+  
+  uint64 buf, abits;
+  uint64 bitmask = 0;
+  int page_nums;
+  if(argaddr(0, &buf) || argint(1, &page_nums) || argaddr(2, &abits) < 0 || page_nums > 64){
+    return -1;
+  }
+  //printf("buf=%p, page_nums=%d, abits=%p\n",buf, page_nums, abits);
+
+  struct proc * p = myproc();
+  //limits the max size
+  uint64 va = buf;
+  pte_t *pte;
+  int a_set;
+
+  for(uint64 i = 0; i < page_nums; i++){
+    va = buf + i * PGSIZE;
+    pte = walk(p->pagetable, va, 1);
+
+    if(pte == 0){
+      return -1;
+    }
+    a_set = (*pte) & PTE_A;
+    if(a_set){
+      bitmask |= (1 << i);
+      *pte &= ~(PTE_A);
+      //printf("page: %d\n",i);
+      //printf("*pte: %p, *pte_clear: %p\n",*pte, *pte & ~(PTE_A));
+    }
+  }
+  //printf("bitmask: %p\n",bitmask);
+  copyout(p->pagetable, abits, (char*)(&bitmask), sizeof(int));
   return 0;
 }
-#endif
+//#endif
 
 uint64
 sys_kill(void)
