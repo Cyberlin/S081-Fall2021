@@ -53,6 +53,25 @@ sys_sbrk(void)
 }
 
 uint64
+sys_sigalarm(void){
+  int ticks;
+  uint64 fn_addr;
+  if(argint(0, &ticks) < 0 || argaddr(1, &fn_addr) < 0){
+    return -1;
+  }
+  myproc()->alarm_handler = fn_addr;
+  myproc()->alarm_ticks = ticks;
+  return 0;
+}
+uint64
+sys_sigreturn(void){
+  struct proc* p = myproc();
+  memmove(p->trapframe, p->alarm_stash, 512);
+  p->ticks = 0;
+  return 0;
+}
+
+uint64
 sys_sleep(void)
 {
   int n;
