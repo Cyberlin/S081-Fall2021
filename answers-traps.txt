@@ -1,0 +1,29 @@
+question_1:
+Which registers contain arguments to functions? For example, which register holds 13 in main's call to printf?
+   -> (1).register a1~a7 hold the function args.a0 holds function return val. (2).a1
+---
+question_2:
+Where is the call to function f in the assembly code for main? Where is the call to g? (Hint: the compiler may inline functions.)
+   -> (1).no such a call to function f, the compiler has optimized it by inlining the function f into the main, so does g.
+---
+question_3:
+At what address is the function printf located?
+   -> (1536)ra
+---
+question_4:
+What value is in the register ra just after the jalr to printf in main?
+   -> 0x38, the address of the next instruction of the jalr
+---
+question_5:
+The output depends on that fact that the RISC-V is little-endian. If the RISC-V were instead big-endian what would you set i to in order to yield the same output? Would you need to change 57616 to a different value?
+    -> (1).HE110 World (2).if the risc-v is big-endian, you should change the i to 0x00726c64, you needn't to change the 57616
+---
+question_6:
+In the following code, what is going to be printed after 'y='? (note: the answer is not a specific value.) Why does this happen?
+
+	printf("x=%d y=%d", 3);
+
+    -> y is a ramdon number, because you didn't set the a2 value, which holds the val of y, so the function printf will print the previous a2 value which can be anything.
+---
+
+
