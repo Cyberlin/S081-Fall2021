@@ -33,6 +33,16 @@ trapinithart(void)
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
 //
+int cow_validation(pagetable_t pgtbl, uint64 va){
+  if(va >= MAXVA){
+    return 0;
+  }
+  pte_t* pte = walk(pgtbl, va, 0);
+  if(pte == 0 || (*pte & PTE_COW) == 0 || (*pte & PTE_V) == 0 ){
+    return 0;
+  }
+  return 1;
+}
 void
 usertrap(void)
 {
@@ -67,12 +77,44 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else {
+  } else if(r_scause() == 15){
+      if(cow_validation(p->pagetable, r_stval()) == 0){
+          printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
+          printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+          p->killed = 1;
+          goto done;
+      }
+      uint64 mem, oldmem;
+      pte_t * pte = walk(p->pagetable, PGROUNDDOWN(r_stval()), 0);
+      uint64 flags = PTE_FLAGS(*pte);
+      flags &= ~PTE_COW;
+      flags |= PTE_W;
+
+      oldmem = PTE2PA(*pte);
+
+      if(refcnt((uint64) oldmem) == 1){
+        *pte |= flags;
+        goto done;
+      }
+
+      if((mem = (uint64)kalloc()) == 0){
+        printf("usertrap(): kalloc() failed\n");
+        p->killed = 1;
+        goto done;
+      }
+
+      memmove((char*)mem, (char*)oldmem, PGSIZE);
+      kfree((char*) oldmem);
+
+      *pte = PA2PTE(mem) | flags;
+
+  }
+  else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
   }
-
+done:
   if(p->killed)
     exit(-1);
 
