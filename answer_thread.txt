@@ -1,0 +1,1 @@
+the entrance and exit of all threads is the thread_switch() function 
