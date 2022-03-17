@@ -5,6 +5,7 @@
         "types.h": "c",
         "fs.h": "c",
         "limits": "c",
-        "*.tcc": "c"
+        "*.tcc": "c",
+        "cmath": "c"
     }
 }

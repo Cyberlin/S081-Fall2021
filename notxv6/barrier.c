@@ -10,7 +10,7 @@ static int round = 0;
 struct barrier {
   pthread_mutex_t barrier_mutex;
   pthread_cond_t barrier_cond;
-  int nthread;      // Number of threads that have reached this round of the barrier
+  int nthread;      // Nuxmber of threads that have reached this round of the barrier
   int round;     // Barrier round
 } bstate;
 
@@ -26,10 +26,16 @@ static void
 barrier()
 {
   // YOUR CODE HERE
-  //
-  // Block until all threads have called barrier() and
-  // then increment bstate.round.
-  //
+  pthread_mutex_lock(&bstate.barrier_mutex);
+  round += 1;
+  if(round < nthread){
+    pthread_cond_wait(&bstate.barrier_cond, &bstate.barrier_mutex);
+  }else{
+    pthread_cond_signal(&bstate.barrier_cond);
+    bstate.round += 1;
+    round = 0;
+  }
+  pthread_mutex_unlock(&bstate.barrier_mutex);
   
 }
 
