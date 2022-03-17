@@ -1,6 +1,24 @@
 #include "kernel/types.h"
 #include "kernel/stat.h"
 #include "user/user.h"
+struct context {
+  uint64 ra;
+  uint64 sp;
+
+  // callee-saved
+  uint64 s0;
+  uint64 s1;
+  uint64 s2;
+  uint64 s3;
+  uint64 s4;
+  uint64 s5;
+  uint64 s6;
+  uint64 s7;
+  uint64 s8;
+  uint64 s9;
+  uint64 s10;
+  uint64 s11;
+};
 
 /* Possible states of a thread: */
 #define FREE        0x0
@@ -14,11 +32,11 @@
 struct thread {
   char       stack[STACK_SIZE]; /* the thread's stack */
   int        state;             /* FREE, RUNNING, RUNNABLE */
+  struct context uctx;
 };
 struct thread all_thread[MAX_THREAD];
 struct thread *current_thread;
 extern void thread_switch(uint64, uint64);
-              
 void 
 thread_init(void)
 {
@@ -62,6 +80,7 @@ thread_schedule(void)
      * Invoke thread_switch to switch from t to next_thread:
      * thread_switch(??, ??);
      */
+    thread_switch((uint64)(&t->uctx), (uint64)(&current_thread->uctx));
   } else
     next_thread = 0;
 }
@@ -76,6 +95,12 @@ thread_create(void (*func)())
   }
   t->state = RUNNABLE;
   // YOUR CODE HERE
+
+  //set the context.ra = func; context.sp = thread.stack
+  memset(&t->uctx, 0, sizeof(t->uctx));
+  t->uctx.ra = (uint64)(func);
+  t->uctx.sp = (uint64)(&t->stack[STACK_SIZE - 1]);
+
 }
 
 void 
@@ -153,6 +178,7 @@ main(int argc, char *argv[])
 {
   a_started = b_started = c_started = 0;
   a_n = b_n = c_n = 0;
+  printf("in uthread ...\n");
   thread_init();
   thread_create(thread_a);
   thread_create(thread_b);
