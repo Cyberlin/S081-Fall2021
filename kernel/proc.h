@@ -18,12 +18,17 @@ struct context {
   uint64 s11;
 };
 
+struct kmem{
+  struct spinlock lock;
+  struct run* cfreelist;
+};
 // Per-CPU state.
 struct cpu {
   struct proc *proc;          // The process running on this cpu, or null.
   struct context context;     // swtch() here to enter scheduler().
   int noff;                   // Depth of push_off() nesting.
   int intena;                 // Were interrupts enabled before push_off()?
+  struct kmem kmem;
 };
 
 extern struct cpu cpus[NCPU];
@@ -80,7 +85,7 @@ struct trapframe {
   /* 280 */ uint64 t6;
 };
 
-enum procstate { UNUSED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 // Per-process state
 struct proc {
@@ -88,11 +93,13 @@ struct proc {
 
   // p->lock must be held when using these:
   enum procstate state;        // Process state
-  struct proc *parent;         // Parent process
   void *chan;                  // If non-zero, sleeping on chan
   int killed;                  // If non-zero, have been killed
   int xstate;                  // Exit status to be returned to parent's wait
   int pid;                     // Process ID
+
+  // wait_lock must be held when using this:
+  struct proc *parent;         // Parent process
 
   // these are private to the process, so p->lock need not be held.
   uint64 kstack;               // Virtual address of kernel stack

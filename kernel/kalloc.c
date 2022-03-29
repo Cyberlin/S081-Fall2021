@@ -8,6 +8,9 @@
 #include "spinlock.h"
 #include "riscv.h"
 #include "defs.h"
+#include "proc.h"
+
+extern struct cpu cpus[NCPU];
 
 void freerange(void *pa_start, void *pa_end);
 
@@ -18,27 +21,100 @@ struct run {
   struct run *next;
 };
 
-struct {
-  struct spinlock lock;
-  struct run *freelist;
-} kmem[NCPU];
+struct run* freelist;
 
 void
 kinit()
 {
-  for(int i = 0; i < NCPU; ++i) {
-    initlock(&kmem[i].lock, "kmem");
-  }
+  //initlock(&kmem.lock, "kmem");
   freerange(end, (void*)PHYSTOP);
 }
+int
+getnpg(void* pa_start, void* pa_end)
+{
+    char* p;
+    int npg = 0;
+    p = (char*)PGROUNDUP((uint64)pa_start);
+    for (; p + PGSIZE <= (char*)pa_end; p += PGSIZE) {
+        npg++;
+    }
+    return npg;
+}
+void
+pgfree(void *pa){
+  struct run* r;
 
+  if((uint64)pa % PGSIZE != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP){
+    panic("pgfree");
+  }
+  
+  memset(pa, 1, PGSIZE);
+
+  r = (struct run*)pa;
+  r->next = freelist;
+  freelist = r;
+}
+void
+pg_nextn(struct run** pp, uint64 num){
+  while(num --){
+    *pp = (*pp)->next;
+  }
+}
+void
+debug_ncfreelist(int hartid){
+   struct run* temp = cpus[hartid].kmem.cfreelist;
+     uint64 tn = 0;
+     while(temp){
+       temp = temp ->next;
+       tn ++;
+     }
+      printf("cpus[%d]: tn =%d start=%p\n",hartid ,tn,cpus[hartid].kmem.cfreelist);
+}
+void
+cpufrlst_split(uint64 npg){
+  struct run* p = freelist;
+  struct run* pre = 0;
+  char lockname[10];
+  for(int i = 0; i < NCPU; i++){
+   if(i == 0){
+     cpus[i].kmem.cfreelist = p;
+     snprintf(lockname, 10, "kmemlock%d",i);
+     initlock(&cpus[i].kmem.lock, lockname);
+     //next cfreelist
+     pg_nextn(&p, (npg % NCPU + npg / NCPU));
+
+     pre = (struct run* )((uint64)p + PGSIZE);
+     pre->next = 0;
+     
+     //debug_ncfreelist(i);
+    
+   }else{ 
+     cpus[i].kmem.cfreelist = p;
+     snprintf(lockname, 10, "kmemlock%d",i);
+     initlock(&cpus[i].kmem.lock, lockname);
+
+     pg_nextn(&p, npg / NCPU);
+     
+     pre = (struct run* )((uint64)p + PGSIZE);
+     pre->next = 0;
+
+     //debug_ncfreelist(i);
+
+   }
+  }
+}
 void
 freerange(void *pa_start, void *pa_end)
 {
   char *p;
+  uint64 npg = 0;
   p = (char*)PGROUNDUP((uint64)pa_start);
-  for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
-    kfree(p);
+  for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE){
+    pgfree(p);
+    npg++;
+  }
+  //printf("npg = %d\n",npg);
+  cpufrlst_split(npg);
 }
 
 // Free the page of physical memory pointed at by v,
@@ -48,24 +124,19 @@ freerange(void *pa_start, void *pa_end)
 void
 kfree(void *pa)
 {
-  struct run *r;
-
-  if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
+  //append the free page to own freelist
+  struct run* r;
+  
+  if((uint64)pa % PGSIZE != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP){
     panic("kfree");
-
-  // Fill with junk to catch dangling refs.
+  }
   memset(pa, 1, PGSIZE);
 
   r = (struct run*)pa;
-
   push_off();
-  int cpu = cpuid();
+  r->next = cpus[cpuid()].kmem.cfreelist;
+  cpus[cpuid()].kmem.cfreelist = r;
   pop_off();
-
-  acquire(&kmem[cpu].lock);
-  r->next = kmem[cpu].freelist;
-  kmem[cpu].freelist = r;
-  release(&kmem[cpu].lock);
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -74,29 +145,38 @@ kfree(void *pa)
 void *
 kalloc(void)
 {
-  struct run *r;
+  struct run* r;
+  uint64 curid;
 
   push_off();
-  int cpu = cpuid();
+  curid = cpuid();
   pop_off();
 
-  acquire(&kmem[cpu].lock);
-  r = kmem[cpu].freelist;
-  if(r)
-    kmem[cpu].freelist = r->next;
-  release(&kmem[cpu].lock);
-
-  // steal memory from other cpu's freelist
-  for(int i = 0; i < NCPU && !r; ++i) {
-    if(cpu == i) continue;
-    acquire(&kmem[i].lock);
-    r = kmem[i].freelist;
-    if(r)
-      kmem[i].freelist = r->next;
-    release(&kmem[i].lock);
+  //try to fetch a pgsize from own freelist
+  struct run* curfreelist = cpus[curid].kmem.cfreelist;
+  r = curfreelist;
+  if(curfreelist == 0){
+    //steal from others
+    for(int i = 0; i < NCPU; i++){
+      if(i == curid){
+        continue;
+      }
+      //borrow from other NCPU
+      if(cpus[i].kmem.cfreelist != 0){
+        acquire(&cpus[i].kmem.lock);
+        r = cpus[i].kmem.cfreelist;
+        cpus[i].kmem.cfreelist = r->next;
+        release(&cpus[i].kmem.lock);
+        break;
+      }
+    }
+  }else{
+    cpus[curid].kmem.cfreelist = r->next;
   }
 
-  if(r)
-    memset((char*)r, 5, PGSIZE); // fill with junk
+  if(r){
+    memset((char*)r, 5, PGSIZE);
+  }
+  
   return (void*)r;
 }

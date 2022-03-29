@@ -28,7 +28,43 @@ struct {
   struct buf buf[NBUF];
   struct buf head[NBUCKET];
 } bcache;
-
+void
+put(uint key, struct buf* val){
+  struct buf* bkt = &bcache.head[hash(key)];
+  val->next = bkt->next;
+  bkt->next = val;
+}
+void
+remove(struct buf* b){
+  struct buf* e, *pre;
+  e = bcache.head[hash(b->blockno)].next;
+  pre = bcache.head[hash(b->blockno)].next;
+  for(; e != 0; e=e->next){
+    if(e == b){
+      if(pre == e) {
+        bcache.head[hash(b->blockno)].next = e->next;
+      }else{
+        pre->next = e->next;
+      }
+      e->next =0;
+      return ;
+    }
+    if(pre != e){
+      pre = pre->next;
+    }
+  }
+}
+void
+debug_bucket(uint blockno){
+  struct buf* e = 0;
+  struct buf bkt = bcache.head[hash(blockno)];
+  int cnt  = 0;
+  for(e = bkt.next; e!=0; e=e->next){
+    cnt ++;
+    printf("blockno: %d  refcnt: %d\n",e->blockno, e->refcnt);
+  }
+  printf("-----------------------------------------^^^^cnt: %d^^^^\n",cnt);
+}
 void
 binit(void)
 {
@@ -36,17 +72,24 @@ binit(void)
 
   for(int i = 0; i < NBUCKET; ++i) {
     initlock(&bcache.locks[i], "bcache.bucket");
-    bcache.head[i].prev = &bcache.head[i];
-    bcache.head[i].next = &bcache.head[i];
+    bcache.head[i].next = 0;
+    // bcache.head[i].prev = &bcache.head[i];
+    // bcache.head[i].next = &bcache.head[i];
   }
-
+  //uint cnt = 0;
   for(b = bcache.buf; b < bcache.buf+NBUF; b++){
-    b->next = bcache.head[0].next;
-    b->prev = &bcache.head[0];
+    // b->next = bcache.head[0].next;
+    // b->prev = &bcache.head[0];
     initsleeplock(&b->lock, "buffer");
-    bcache.head[0].next->prev = b;
-    bcache.head[0].next = b;
+    //cnt++;
+    b->next = 0;
+    put(0, b);
+    
+    // bcache.head[0].next->prev = b;
+    // bcache.head[0].next = b;
   }
+  //debug_bucket(0);
+  
 }
 
 // Look through buffer cache for block on device dev.
@@ -61,7 +104,7 @@ bget(uint dev, uint blockno)
   head = &bcache.head[hash(blockno)];
 
   // Is the block already cached?
-  for(b = head->next; b != head; b = b->next){
+  for(b = head->next; b != 0; b = b->next){
     if(b->dev == dev && b->blockno == blockno){
       b->refcnt++;
       release(&bcache.locks[hash(blockno)]);
@@ -74,21 +117,18 @@ bget(uint dev, uint blockno)
   // Recycle the least recently used (LRU) unused buffer.
   for(int i = 1; i < NBUCKET; ++i) {
     acquire(&bcache.locks[hash(blockno+i)]);
+    //debug_bucket(blockno+i);
     freehead = &bcache.head[hash(blockno+i)];
-    for(b = freehead->prev; b != freehead; b = b->prev) {
+    for(b = freehead->next; b != 0; b = b->next) {
       if(b->refcnt != 0) continue;
+      remove(b);
       b->dev = dev;
       b->blockno = blockno;
       b->valid = 0;
       b->refcnt = 1;
       // remove from free list
-      b->next->prev = b->prev;
-      b->prev->next = b->next;
       // insert to head
-      b->next = head->next;
-      b->prev = head;
-      head->next->prev = b;
-      head->next = b;
+      put(blockno, b);
       release(&bcache.locks[hash(blockno+i)]);
       release(&bcache.locks[hash(blockno)]);
       acquiresleep(&b->lock);
@@ -136,12 +176,12 @@ brelse(struct buf *b)
   b->refcnt--;
   if (b->refcnt == 0) {
     // no one is waiting for it.
-    b->next->prev = b->prev;
-    b->prev->next = b->next;
-    b->next = &bcache.head[hash(b->blockno)];
-    b->prev = bcache.head[hash(b->blockno)].prev;
-    bcache.head[hash(b->blockno)].prev->next = b;
-    bcache.head[hash(b->blockno)].prev = b;
+    // b->next->prev = b->prev;
+    // b->prev->next = b->next;
+    // b->next = &bcache.head[hash(b->blockno)];
+    // b->prev = bcache.head[hash(b->blockno)].prev;
+    // bcache.head[hash(b->blockno)].prev->next = b;
+    // bcache.head[hash(b->blockno)].prev = b;
   }
   
   release(&bcache.locks[hash(b->blockno)]);
