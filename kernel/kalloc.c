@@ -134,8 +134,10 @@ kfree(void *pa)
 
   r = (struct run*)pa;
   push_off();
+  acquire(&cpus[cpuid()].kmem.lock);
   r->next = cpus[cpuid()].kmem.cfreelist;
   cpus[cpuid()].kmem.cfreelist = r;
+  release(&cpus[cpuid()].kmem.lock);
   pop_off();
 }
 
