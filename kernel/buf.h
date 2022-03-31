@@ -5,10 +5,11 @@ struct buf {
   uint blockno;
   struct sleeplock lock;
   uint refcnt;
-  //struct buf *prev; // LRU cache list
+  struct buf *prev; // LRU cache list
   struct buf *next;
+  struct buf* out;
   uchar data[BSIZE];
 };
 
-#define NBUCKET 13
+#define NBUCKET 17
 #define hash(blockno) ((blockno) % NBUCKET)

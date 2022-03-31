@@ -153,9 +153,11 @@ kalloc(void)
   pop_off();
 
   //try to fetch a pgsize from own freelist
+  acquire(&cpus[curid].kmem.lock);
   struct run* curfreelist = cpus[curid].kmem.cfreelist;
   r = curfreelist;
   if(curfreelist == 0){
+    //release(&cpus[curid].kmem.lock);
     //steal from others
     for(int i = 0; i < NCPU; i++){
       if(i == curid){
@@ -173,6 +175,7 @@ kalloc(void)
   }else{
     cpus[curid].kmem.cfreelist = r->next;
   }
+    release(&cpus[curid].kmem.lock);
 
   if(r){
     memset((char*)r, 5, PGSIZE);
