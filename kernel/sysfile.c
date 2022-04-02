@@ -287,6 +287,7 @@ uint64
 sys_open(void)
 {
   char path[MAXPATH];
+  char nextpath[MAXPATH];
   int fd, omode;
   struct file *f;
   struct inode *ip;
@@ -311,6 +312,26 @@ sys_open(void)
     ilock(ip);
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
+      end_op();
+      return -1;
+    }
+  }
+  if(ip->type == T_SYMLINK && (omode & O_NOFOLLOW) == 0){
+    int cnt = 0;
+    while(ip->type == T_SYMLINK && cnt <= MAXFOLLOW){
+      if(readi(ip, 0, (uint64)nextpath, 0, sizeof(nextpath)) != sizeof(nextpath)){
+        panic("sys_open: readi");
+      }
+      //printf("sys_open: nxtpath: %s\n",nextpath);
+      iunlockput(ip);
+      if((ip = namei(nextpath)) == 0){
+        end_op();
+        return -1;
+      }
+      ilock(ip);
+      cnt++;
+    }
+    if(cnt > MAXFOLLOW){
       end_op();
       return -1;
     }
@@ -482,5 +503,67 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+void
+re2ab(char* path, char* re, char* linkto){
+  if(*re == '/') {
+    strncpy(linkto, re, strlen(re) + 1);
+    return ;
+  }
+
+  char *tail = path;
+  while(*tail)
+    tail++;
+  tail--;
+
+  while(*tail == '/')
+    tail--;
+  while(*tail != '/')
+    tail--;
+  tail++;
+
+  for(; *re; tail++, re++){
+    *tail = *re;
+  }
+  *tail = *re;
+  strncpy(linkto, path, strlen(path) + 1);
+  return ;
+}
+uint64
+sys_symlink(void){
+  char target[MAXPATH], path[MAXPATH];
+  char debug[MAXPATH];
+  char linkto[MAXPATH];
+  struct inode *ip, *jp;
+
+  begin_op();
+  
+  if((argstr(0, target, MAXPATH)) < 0 ||
+     argstr(1, path, MAXPATH) < 0 ||
+     (ip = create(path, T_SYMLINK, 0, 0)) == 0){
+    end_op();
+    return -1;
+  }
+  //如果是link 到一个目录身上就表示失败
+  if ((jp = namei(target)) != 0 && jp->type == T_DIR){
+    iunlockput(jp);
+    end_op();
+    return -1;
+  }
+  re2ab(path, target, linkto);
+  //printf("in symlink: re2ab: %s\n",path);
+  //write the target path to the ip, the target path should in absolute path form
+  if(writei(ip, 0, (uint64)linkto, 0, sizeof(linkto)) != sizeof(linkto)){
+    panic("symlink");
+  }
+  if(readi(ip, 0, (uint64)debug, 0, sizeof(debug)) != sizeof(debug)){
+    panic("symlink");
+  }
+  printf("in symlink: debug:  %s\n",debug);
+
+  iunlockput(ip);
+  end_op();
+  //printf("in symlink: target = %s path = %s\n",target, path);
   return 0;
 }

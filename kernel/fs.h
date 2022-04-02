@@ -4,7 +4,7 @@
 
 #define ROOTINO  1   // root i-number
 #define BSIZE 1024  // block size
-
+#define MAXFOLLOW 10
 // Disk layout:
 // [ boot block | super block | log | inode blocks |
 //                                          free bit map | data blocks]
