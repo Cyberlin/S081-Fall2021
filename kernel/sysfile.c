@@ -486,7 +486,42 @@ sys_pipe(void)
 }
 uint64
 sys_mmap(void){
-  return -1;
+  uint64 addr, len, offset;
+  int prot, flags, fd;
+  struct proc * p;
+  struct vm_area_struct vma;
+  struct file* openfile;
+
+  p = myproc();
+  
+
+  if(argaddr(0, &addr) < 0 || argaddr(1, &len) < 0 || argint(2, &prot) < 0 ||
+    argint(3, &flags) < 0 || argfd(4, &fd, &openfile) < 0 || argaddr(5, &offset) < 0)
+  {
+    return -1;
+  }
+  if(!openfile->writable && (prot & PROT_WRITE) && (flags & MAP_SHARED)){
+    return -1;
+  } 
+  
+  vma.addr = p->sz;
+
+  p->sz += len;
+
+  vma.flags = flags;
+  vma.len = PGROUNDUP(len);
+  vma.openfile = filedup(openfile);
+  vma.prot = prot;
+  vma.offset = 0;
+  vma.used = 1;
+
+
+  if(insert_vma(p, &vma) == -1){
+    return -1;
+  }
+  
+  return vma.addr;
+
 }
 uint64
 sys_munmap(void){

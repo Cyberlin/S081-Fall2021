@@ -8,6 +8,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct vm_area_struct;
 
 // bio.c
 void            binit(void);
@@ -82,6 +83,8 @@ void            panic(char*) __attribute__((noreturn));
 void            printfinit(void);
 
 // proc.c
+int             find_vma(struct proc*, uint64);
+int             insert_vma(struct proc*, struct vm_area_struct*);
 int             cpuid(void);
 void            exit(int);
 int             fork(void);

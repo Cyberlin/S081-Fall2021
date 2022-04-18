@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "cmath": "c",
+        "*.tcc": "c",
+        "memlayout.h": "c",
+        "fs.h": "c"
+    }
+}

@@ -120,6 +120,10 @@ found:
   p->pid = allocpid();
   p->state = USED;
 
+  //this vma is dedicated for mmap area
+  p->nvma = 0;
+  memset((void*)((&p->vmas)), 0, NVMA * sizeof(struct vm_area_struct));
+
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
@@ -652,5 +656,50 @@ procdump(void)
       state = "???";
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
+  }
+}
+// return if exists, -1 means not found
+int
+find_vma(struct proc *p, uint64 addr){
+  struct vm_area_struct *v;
+  v = p->vmas;
+  
+  for(int i = 0; i < p->nvma; i++, v++){
+    if(v->used){
+      if(v->addr <= addr && addr < v->addr + v->len){
+        return i;
+      }
+    }
+  }
+  // not found
+  return -1;
+}
+int
+insert_vma(struct proc *p, struct vm_area_struct* vma){
+  struct vm_area_struct* v;
+
+  int index = -1;
+  for(int i = 0; i < NVMA; i++){
+    if(!p->vmas[i].used){
+      index = i;
+      break;
+    }
+  }
+  
+  v = &p->vmas[index];
+  
+  v->addr = vma->addr;
+  v->len = vma->len;
+  v->openfile = vma->openfile;
+  v->prot = vma->prot;
+  v->flags = vma->flags;
+  v->used = vma->used;
+  
+  p->nvma ++;
+
+  return index;
+
+  if(index == -1){
+    return -1;
   }
 }
